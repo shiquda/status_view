@@ -31,6 +31,72 @@ class StatusService {
     return _resultCache[configName];
   }
 
+  // 测试API连接
+  static Future<Map<String, dynamic>> testApiConnection(String url) async {
+    final result = <String, dynamic>{
+      'isSuccess': false,
+      'statusCode': null,
+      'message': '',
+      'responseBody': '',
+      'error': null,
+    };
+
+    try {
+      debugPrint('测试连接到: $url');
+
+      // 发送HTTP请求
+      final response = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 10));
+
+      result['statusCode'] = response.statusCode;
+
+      // 检查响应状态码
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        result['isSuccess'] = true;
+        result['message'] = '连接成功! 返回码: ${response.statusCode}';
+
+        // 尝试解析JSON响应
+        try {
+          final jsonData = jsonDecode(response.body);
+          result['responseBody'] = const JsonEncoder.withIndent(
+            '  ',
+          ).convert(jsonData);
+          result['message'] += '\n成功解析为JSON';
+        } catch (e) {
+          // 如果不是有效的JSON，保存原始响应
+          result['responseBody'] =
+              response.body.length > 1000
+                  ? '${response.body.substring(0, 1000)}...(截断)'
+                  : response.body;
+          result['message'] += '\n注意: 响应不是有效的JSON格式';
+        }
+      } else {
+        result['message'] = '请求失败，状态码: ${response.statusCode}';
+        result['responseBody'] =
+            response.body.length > 500
+                ? '${response.body.substring(0, 500)}...(截断)'
+                : response.body;
+      }
+    } catch (e) {
+      result['error'] = e.toString();
+
+      if (e.toString().contains('SocketException')) {
+        result['message'] = '网络连接错误: 无法连接到服务器，请检查网络设置或URL是否正确';
+      } else if (e.toString().contains('Certificate')) {
+        result['message'] = '安全连接错误: 证书验证失败，可能需要配置应用信任设置';
+      } else if (e.toString().contains('timeout')) {
+        result['message'] = '连接超时: 服务器响应时间过长';
+      } else if (e.toString().contains('Invalid URL')) {
+        result['message'] = 'URL格式错误: 请确保输入了正确的URL地址';
+      } else {
+        result['message'] = '连接错误: $e';
+      }
+    }
+
+    return result;
+  }
+
   // 根据配置获取状态
   static Future<StatusResult> fetchStatus(StatusConfig config) async {
     try {
@@ -114,6 +180,7 @@ class StatusService {
   // 从JSON对象中根据路径提取值
   // 支持简化的JSONPath格式：$.key1.key2[0].key3
   static dynamic _extractValueFromJson(dynamic json, String path) {
+    if (json == null) return null;
     if (path.isEmpty) return json;
 
     // 处理JSONPath格式
@@ -125,14 +192,25 @@ class StatusService {
     final keys = path.split('.');
     dynamic result = json;
 
-    for (final key in keys) {
-      if (result == null) return null;
+    try {
+      for (final key in keys) {
+        if (result == null) return null;
 
-      if (result is Map) {
-        result = result[key];
-      } else {
-        throw Exception('无法从非对象类型中提取"$key"，当前值: $result');
+        if (result is Map) {
+          // 检查键是否存在
+          if (!result.containsKey(key)) {
+            debugPrint('警告: 在对象中找不到键"$key"');
+            return null;
+          }
+          result = result[key];
+        } else {
+          debugPrint('警告: 无法从非对象类型中提取"$key"，当前值: $result');
+          return null;
+        }
       }
+    } catch (e) {
+      debugPrint('JSON解析错误: $e');
+      return null;
     }
 
     return result;
@@ -143,6 +221,13 @@ class StatusService {
     // 移除开头的 $
     path = path.substring(1);
     if (path.isEmpty || path == '.') return json;
+
+    // 如果JSON本身为null或不是一个Map或List，则提前返回
+    if (json == null) return null;
+    if (!(json is Map) && !(json is List)) {
+      debugPrint('警告: JSON数据不是对象或数组类型，无法使用JSONPath: $json');
+      return json;
+    }
 
     // 如果以点开头，移除点
     if (path.startsWith('.')) path = path.substring(1);
@@ -180,38 +265,68 @@ class StatusService {
     // 遍历每个路径段
     for (var segment in segments) {
       if (current == null) {
+        debugPrint('警告: 在路径"$path"中段"$segment"之前遇到null值');
         return null;
       }
 
       // 处理数组索引
       if (segment.startsWith('[') && segment.endsWith(']')) {
-        // 提取索引数字
-        int index = int.parse(segment.substring(1, segment.length - 1));
+        try {
+          // 提取索引数字
+          int index = int.parse(segment.substring(1, segment.length - 1));
 
-        if (current is List) {
-          if (index >= 0 && index < current.length) {
-            current = current[index];
+          if (current is List) {
+            if (index >= 0 && index < current.length) {
+              current = current[index];
+            } else {
+              debugPrint('警告: 数组索引超出范围: $index，数组长度: ${current.length}');
+              return null;
+            }
           } else {
-            throw Exception('数组索引超出范围: $index，数组长度: ${current.length}');
+            debugPrint('警告: 无法对非数组类型使用索引: $current');
+            return null;
           }
-        } else {
-          throw Exception('无法对非数组类型使用索引: $current');
+        } catch (e) {
+          debugPrint('解析数组索引错误: $e');
+          return null;
         }
       }
       // 处理普通属性，可能包含点分隔符
       else {
-        for (var key in segment.split('.')) {
-          if (key.isEmpty) continue;
+        try {
+          for (var key in segment.split('.')) {
+            if (key.isEmpty) continue;
 
-          if (current is Map) {
-            current = current[key];
-          } else {
-            throw Exception('无法从非对象类型中提取"$key"，当前值: $current');
+            if (current is Map) {
+              // 检查键是否存在
+              if (!current.containsKey(key)) {
+                debugPrint('警告: 在对象中找不到键"$key"');
+                return null;
+              }
+              current = current[key];
+
+              // 检查取出的值是否为null
+              if (current == null) {
+                debugPrint('警告: 键"$key"的值为null');
+                return null;
+              }
+            } else {
+              debugPrint('警告: 无法从非对象类型中提取"$key"，当前值: $current');
+              return null;
+            }
           }
+        } catch (e) {
+          debugPrint('属性访问错误: $e');
+          return null;
         }
       }
     }
 
     return current;
+  }
+
+  // 公共方法用于外部调用，访问私有的JSON解析方法
+  static dynamic extractValueFromJson(dynamic json, String path) {
+    return _extractValueFromJson(json, path);
   }
 }

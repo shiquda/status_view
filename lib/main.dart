@@ -194,8 +194,8 @@ class _StatusViewPageState extends State<StatusViewPage> {
             MaterialPageRoute(builder: (context) => const configPage()),
           );
 
-          // 用户返回后重新加载配置
-          if (mounted) {
+          // 只有当返回结果为true时才重新加载配置
+          if (mounted && result == true) {
             _loadConfigs();
           }
         },
@@ -411,8 +411,8 @@ class _StatusViewPageState extends State<StatusViewPage> {
                     ),
                   );
 
-                  // 编辑完成后重新加载配置
-                  if (mounted) {
+                  // 只有当返回结果为true时才重新加载配置
+                  if (mounted && result == true) {
                     _loadConfigs();
                   }
                 },
