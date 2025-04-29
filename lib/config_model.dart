@@ -11,6 +11,11 @@ class StatusConfig {
     required this.stringFormat,
   });
 
+  // 创建一个空的配置，用于新建配置时使用
+  factory StatusConfig.empty() =>
+      StatusConfig(url: "", name: "", jsonSyntax: "", stringFormat: "");
+
+  // 保留默认示例配置，但不用于初始化表单
   factory StatusConfig.defaults() => StatusConfig(
     url: "https://example.com/status",
     name: "默认状态",

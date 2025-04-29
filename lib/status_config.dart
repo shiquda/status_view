@@ -63,8 +63,8 @@ class _ConfigFormState extends State<_ConfigForm> {
   @override
   void initState() {
     super.initState();
-    // 如果有初始配置，使用它，否则使用默认配置
-    _config = widget.initialConfig ?? StatusConfig.defaults();
+    // 如果有初始配置，使用它，否则使用空配置
+    _config = widget.initialConfig ?? StatusConfig.empty();
   }
 
   @override
@@ -72,96 +72,101 @@ class _ConfigFormState extends State<_ConfigForm> {
     return Form(
       key: _formKey,
       autovalidateMode: AutovalidateMode.onUserInteraction,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 20),
-            // 配置名称
-            _buildTextField(
-              label: '配置名称*',
-              hint: '我的配置',
-              icon: Icons.label,
-              initialValue: _config.name,
-              validator:
-                  (value) => value == null || value.isEmpty ? '请输入名称' : null,
-              onSaved: (value) => _config = _config.copyWith(name: value!),
-              disabled: widget.initialConfig != null,
-            ),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 配置名称
+              _buildTextField(
+                label: '配置名称*',
+                hint: '我的配置',
+                icon: Icons.label,
+                initialValue: _config.name,
+                validator:
+                    (value) => value == null || value.isEmpty ? '请输入名称' : null,
+                onSaved: (value) => _config = _config.copyWith(name: value!),
+                disabled: widget.initialConfig != null, // 编辑模式下不允许修改名称
+              ),
+              const SizedBox(height: 24),
 
-            const SizedBox(height: 40),
-            // URL输入
-            _buildTextField(
-              label: 'API地址*',
-              hint: 'https://example.com/api',
-              icon: Icons.link,
-              initialValue: _config.url,
-              validator: (value) {
-                if (value == null || value.isEmpty) return '请输入URL';
-                if (!value.startsWith('http')) return '需以http/https开头';
-                return null;
-              },
-              onSaved: (value) => _config = _config.copyWith(url: value!),
-            ),
-            const SizedBox(height: 40),
-            // JSON语法
-            _buildTextField(
-              label: 'JSON语法*',
-              hint: r'$.data.items',
-              icon: Icons.code,
-              initialValue: _config.jsonSyntax,
-              validator:
-                  (value) =>
-                      value == null || value.isEmpty ? '请输入JSON语法' : null,
-              onSaved:
-                  (value) => _config = _config.copyWith(jsonSyntax: value!),
-            ),
-            const SizedBox(height: 40),
-            // 字符串格式
-            _buildTextField(
-              label: '字符串格式',
-              hint: 'Status: %s',
-              icon: Icons.format_quote,
-              initialValue: _config.stringFormat,
-              onSaved:
-                  (value) => _config = _config.copyWith(stringFormat: value),
-            ),
-            const SizedBox(height: 40),
-            // 保存按钮
-            ElevatedButton.icon(
-              icon:
-                  _isSaving
-                      ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                      : const Icon(Icons.save, size: 20),
-              label: Text(
-                _isSaving ? '保存中...' : '保存配置',
-                style: const TextStyle(fontSize: 16),
+              // URL输入
+              _buildTextField(
+                label: 'API地址*',
+                hint: 'https://example.com/api',
+                icon: Icons.link,
+                initialValue: _config.url,
+                validator: (value) {
+                  if (value == null || value.isEmpty) return '请输入URL';
+                  if (!value.startsWith('http')) return '需以http/https开头';
+                  return null;
+                },
+                onSaved: (value) => _config = _config.copyWith(url: value!),
               ),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+              const SizedBox(height: 24),
+
+              // JSON语法
+              _buildTextField(
+                label: 'JSON语法*',
+                hint: r'$.data.items',
+                icon: Icons.code,
+                initialValue: _config.jsonSyntax,
+                validator:
+                    (value) =>
+                        value == null || value.isEmpty ? '请输入JSON语法' : null,
+                onSaved:
+                    (value) => _config = _config.copyWith(jsonSyntax: value!),
+              ),
+              const SizedBox(height: 24),
+
+              // 字符串格式
+              _buildTextField(
+                label: '字符串格式',
+                hint: 'Status: %s',
+                icon: Icons.format_quote,
+                initialValue: _config.stringFormat,
+                onSaved:
+                    (value) => _config = _config.copyWith(stringFormat: value),
+              ),
+              const SizedBox(height: 32),
+
+              // 保存按钮
+              ElevatedButton.icon(
+                icon:
+                    _isSaving
+                        ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                        : const Icon(Icons.save, size: 20),
+                label: Text(
+                  _isSaving ? '保存中...' : '保存配置',
+                  style: const TextStyle(fontSize: 16),
                 ),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                onPressed: _isSaving ? null : _saveConfig,
               ),
-              onPressed: _isSaving ? null : _saveConfig,
-            ),
-            const SizedBox(height: 20),
-            // 重置按钮
-            if (widget.initialConfig == null)
-              TextButton(
-                child: const Text('恢复默认设置'),
-                onPressed:
-                    () => setState(() {
-                      _config = StatusConfig.defaults();
-                      _formKey.currentState?.reset();
-                    }),
-              ),
-          ],
+              const SizedBox(height: 16),
+
+              // 重置按钮
+              if (widget.initialConfig == null)
+                TextButton(
+                  child: const Text('清空所有输入'),
+                  onPressed:
+                      () => setState(() {
+                        _config = StatusConfig.empty();
+                        _formKey.currentState?.reset();
+                      }),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -186,7 +191,8 @@ class _ConfigFormState extends State<_ConfigForm> {
         filled: true,
         fillColor: Colors.grey[50],
       ),
-      initialValue: initialValue,
+      // 仅在编辑现有配置时提供初始值，否则为null
+      initialValue: widget.initialConfig != null ? initialValue : null,
       validator: validator,
       onSaved: onSaved,
       inputFormatters:
