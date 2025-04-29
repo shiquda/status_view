@@ -253,23 +253,28 @@ class _StatusViewPageState extends State<StatusViewPage> {
                 ],
               ),
               const SizedBox(height: 4),
-              Text(
-                result == null
-                    ? '点击获取...'
-                    : result.isSuccess
-                    ? result.formattedValue(config.stringFormat)
-                    : '错误: ${_shortenError(result.error)}',
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color:
-                      result?.isSuccess == true
-                          ? Colors.green.shade700
-                          : result?.isSuccess == false
-                          ? Colors.red.shade700
-                          : Colors.grey.shade700,
-                  fontSize: 12,
+              SizedBox(
+                height: 60,
+                child: Center(
+                  child: Text(
+                    result == null
+                        ? '点击获取...'
+                        : result.isSuccess
+                        ? result.formattedValue(config.stringFormat)
+                        : '错误: ${_shortenError(result.error)}',
+                    textAlign: TextAlign.center,
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color:
+                          result?.isSuccess == true
+                              ? Colors.green.shade700
+                              : result?.isSuccess == false
+                              ? Colors.red.shade700
+                              : Colors.grey.shade700,
+                      fontSize: 14,
+                    ),
+                  ),
                 ),
               ),
               if (result != null && !result.isSuccess)
