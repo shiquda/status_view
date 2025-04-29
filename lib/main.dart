@@ -128,9 +128,8 @@ class _StatusViewPageState extends State<StatusViewPage> {
 
   // 刷新所有状态
   Future<void> _refreshAllStatuses() async {
-    for (var config in _configs) {
-      await _refreshStatus(config);
-    }
+    // 使用Future.wait并行执行所有刷新任务
+    await Future.wait(_configs.map((config) => _refreshStatus(config)));
   }
 
   @override

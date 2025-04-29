@@ -430,7 +430,7 @@ class _SettingsPageState extends State<SettingsPage> {
           }
         }
 
-        if (jsonString != null && jsonString.isNotEmpty) {
+        if (jsonString.isNotEmpty) {
           await _processImportedJson(jsonString);
         } else {
           throw Exception('无法读取文件内容');
