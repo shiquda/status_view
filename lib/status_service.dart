@@ -34,18 +34,24 @@ class StatusService {
   // 根据配置获取状态
   static Future<StatusResult> fetchStatus(StatusConfig config) async {
     try {
+      debugPrint('开始请求URL: ${config.url}');
+
       // 发送HTTP请求
       final response = await http
           .get(Uri.parse(config.url))
           .timeout(const Duration(seconds: 10));
 
+      debugPrint('收到响应状态码: ${response.statusCode}');
+
       if (response.statusCode >= 200 && response.statusCode < 300) {
         // 请求成功，解析JSON
         try {
           final jsonData = jsonDecode(response.body);
+          debugPrint('JSON解析成功');
 
           // 使用配置的JSON语法路径提取值
           final value = _extractValueFromJson(jsonData, config.jsonSyntax);
+          debugPrint('提取的值: $value');
 
           // 创建成功结果并缓存
           final result = StatusResult(value: value.toString(), isSuccess: true);
@@ -65,10 +71,12 @@ class StatusService {
         }
       } else {
         // HTTP请求失败
+        debugPrint('HTTP请求失败，状态码: ${response.statusCode}');
         final result = StatusResult(
           value: '',
           isSuccess: false,
-          error: '请求失败 (${response.statusCode})',
+          error:
+              '请求失败 (${response.statusCode}): ${response.reasonPhrase ?? "未知错误"}',
         );
 
         _resultCache[config.name] = result;
@@ -76,11 +84,26 @@ class StatusService {
       }
     } catch (e) {
       // 网络或其他错误
-      debugPrint('请求错误: $e');
+      debugPrint('请求错误类型: ${e.runtimeType}');
+      debugPrint('请求错误详情: $e');
+
+      String errorMessage;
+
+      // 针对特定类型的错误提供更友好的提示
+      if (e.toString().contains('SocketException')) {
+        errorMessage = '网络连接错误: 无法连接到服务器，请检查网络设置或URL是否正确';
+      } else if (e.toString().contains('Certificate')) {
+        errorMessage = '安全连接错误: 证书验证失败，可能需要配置应用信任设置';
+      } else if (e.toString().contains('timeout')) {
+        errorMessage = '连接超时: 服务器响应时间过长';
+      } else {
+        errorMessage = '连接错误: $e';
+      }
+
       final result = StatusResult(
         value: '',
         isSuccess: false,
-        error: '连接错误: $e',
+        error: errorMessage,
       );
 
       _resultCache[config.name] = result;

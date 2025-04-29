@@ -93,7 +93,9 @@ class _StatusViewPageState extends State<StatusViewPage> {
     });
 
     try {
+      debugPrint('开始刷新状态: ${config.name}, URL: ${config.url}');
       final result = await StatusService.fetchStatus(config);
+      debugPrint('状态刷新完成: ${config.name}, 成功: ${result.isSuccess}');
 
       // 检查组件是否还挂载
       if (!mounted) return;
@@ -107,11 +109,17 @@ class _StatusViewPageState extends State<StatusViewPage> {
 
       if (!mounted) return;
 
+      // 确保错误信息不会太长，避免UI溢出
+      String errorMsg = e.toString();
+      if (errorMsg.length > 100) {
+        errorMsg = '${errorMsg.substring(0, 97)}...';
+      }
+
       setState(() {
         _results[config.name] = StatusResult(
           value: '',
           isSuccess: false,
-          error: '刷新失败: $e',
+          error: '刷新失败: $errorMsg',
         );
         _refreshingStates[config.name] = false;
       });
@@ -176,7 +184,7 @@ class _StatusViewPageState extends State<StatusViewPage> {
                   itemCount: _configs.length,
                   itemBuilder: (context, index) {
                     final config = _configs[index];
-                    return _buildStatusItem(config, index);
+                    return _buildStatusCard(context, config);
                   },
                 ),
               ),
@@ -199,68 +207,51 @@ class _StatusViewPageState extends State<StatusViewPage> {
     );
   }
 
-  Widget _buildStatusItem(StatusConfig config, int index) {
-    final isRefreshing = _refreshingStates[config.name] ?? false;
+  Widget _buildStatusCard(BuildContext context, StatusConfig config) {
     final result = _results[config.name];
+    final isRefreshing = _refreshingStates[config.name] == true;
 
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        color:
-            result?.isSuccess == true
-                ? Colors.green.shade100
-                : result?.isSuccess == false
-                ? Colors.red.shade100
-                : Colors.blue.shade100,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.all(8),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () => _refreshStatus(config),
-        onLongPress: () {
-          _showOptionsDialog(config);
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          if (isRefreshing) return;
+          if (result != null && !result.isSuccess) {
+            // 如果有错误，显示错误详情对话框
+            _showErrorDetailDialog(context, config, result);
+          } else {
+            _refreshStatus(config);
+          }
         },
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
+        onLongPress: () => _showOptionsDialog(config),
+        child: Container(
+          padding: const EdgeInsets.all(16),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              isRefreshing
-                  ? const SizedBox(
-                    width: 36,
-                    height: 36,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                  : Icon(
-                    result?.isSuccess == true
-                        ? Icons.check_circle
-                        : result?.isSuccess == false
-                        ? Icons.error
-                        : Icons.sync,
-                    size: 36,
-                    color:
-                        result?.isSuccess == true
-                            ? Colors.green
-                            : result?.isSuccess == false
-                            ? Colors.red
-                            : Colors.blue,
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      config.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
                   ),
-              const SizedBox(height: 8),
-              Text(
-                config.name,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
+                  if (isRefreshing)
+                    const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                ],
               ),
               const SizedBox(height: 4),
               Text(
@@ -268,7 +259,7 @@ class _StatusViewPageState extends State<StatusViewPage> {
                     ? '点击获取...'
                     : result.isSuccess
                     ? result.formattedValue(config.stringFormat)
-                    : '错误: ${result.error?.replaceAll(RegExp(r'Exception: '), '')}',
+                    : '错误: ${_shortenError(result.error)}',
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -282,11 +273,113 @@ class _StatusViewPageState extends State<StatusViewPage> {
                   fontSize: 12,
                 ),
               ),
+              if (result != null && !result.isSuccess)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    '点击查看详情',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.blue.shade700,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  // 截断错误信息
+  String _shortenError(String? error) {
+    if (error == null || error.isEmpty) return '未知错误';
+    // 移除Exception:前缀
+    String shortenedError = error.replaceAll(RegExp(r'Exception: '), '');
+    // 截断长错误信息
+    if (shortenedError.length > 50) {
+      return '${shortenedError.substring(0, 47)}...';
+    }
+    return shortenedError;
+  }
+
+  // 显示错误详情对话框
+  void _showErrorDetailDialog(
+    BuildContext context,
+    StatusConfig config,
+    StatusResult result,
+  ) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.red.shade700),
+                const SizedBox(width: 8),
+                const Text('错误详情'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '配置: ${config.name}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text('URL: ${config.url}'),
+                const SizedBox(height: 12),
+                const Text(
+                  '错误信息:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: Text(
+                    result.error ?? '未知错误',
+                    style: TextStyle(color: Colors.red.shade900),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '最后刷新: ${_formatDateTime(result.timestamp)}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton.icon(
+                icon: const Icon(Icons.refresh),
+                label: const Text('重试'),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _refreshStatus(config);
+                },
+              ),
+              TextButton(
+                child: const Text('关闭'),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+    );
+  }
+
+  // 格式化日期时间
+  String _formatDateTime(DateTime dateTime) {
+    return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')} ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}:${dateTime.second.toString().padLeft(2, '0')}';
   }
 
   void _showOptionsDialog(StatusConfig config) {
